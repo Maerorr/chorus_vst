@@ -86,6 +86,9 @@ impl Chorus {
 
         self.depth = depth;
         self.calc_depth = depth / 1000.0 * self.sample_rate;
+        // if self.calc_depth > self.delay_samples as f32 {
+        //     self.calc_depth = self.delay_samples as f32;
+        // }
 
         for (lfol, lfor) in self.left_lfos.iter_mut().zip(self.right_lfos.iter_mut()) {
             lfol.rate = rate;
@@ -112,48 +115,14 @@ impl Chorus {
         }
     }
 
-    pub fn process_stereo(&mut self, input: (f32, f32)) -> (f32, f32) {
-        let mut left_out = 0.0;
-        let mut right_out = 0.0;
 
-        let x_l = input.0 + self.wet * self.left_feedback_buffer.get(self.delay_samples).unwrap();
-        let x_r = input.1 + self.wet * self.right_feedback_buffer.get(self.delay_samples).unwrap();
-        let mut offsets = [0i32; 6];
-        for lfo in self.left_lfos.iter_mut().zip(self.right_lfos.iter_mut()) {
-            offsets[0] += (lfo.0.next_value() * self.calc_depth / 2.0).round() as i32;
-            offsets[1] += (lfo.1.next_value() * self.calc_depth / 2.0).round() as i32;
-        }
-        let mut delayed_signal = (0.0, 0.0);
-        let mut lfo_count = 0;
-        for (delay_l, delay_r) in self.left_delays.iter_mut().zip(self.right_delays.iter_mut()) {
-            delayed_signal.0 += delay_l.process_sample(x_l, (delay_l.delay as i32 + offsets[lfo_count]) as usize);
-            lfo_count += 1;
-            delayed_signal.1 += delay_r.process_sample(x_r, (delay_r.delay as i32 + offsets[lfo_count]) as usize);
-            lfo_count += 1;
-        }
-
-        left_out = self.dry * x_l + self.wet * 1.0/3.0 * delayed_signal.0;
-        right_out = self.dry * x_r + self.wet * 1.0/3.0 * delayed_signal.1;
-
-        if self.wet + self.dry > 1.0 {
-            left_out = left_out / (self.wet + self.dry);
-            right_out = right_out / (self.wet + self.dry);
-        }
-
-        self.left_feedback_buffer.rotate_right(1);
-        self.left_feedback_buffer[0] = left_out;
-        self.right_feedback_buffer.rotate_right(1);
-        self.right_feedback_buffer[0] = right_out;
-        
-        (left_out, right_out)
-    }
 
     pub fn process_left(&mut self, x: f32) -> f32 {
         let xx = x + self.wet * self.feedback * self.left_feedback_buffer.get(self.delay_samples).unwrap();
 
-        let offset1 = (self.left_lfos[0].next_value() * self.calc_depth / 2.0).round() as i32;
-        let offset2 = (self.left_lfos[1].next_value() * self.calc_depth / 2.0).round() as i32;
-        let offset3 = (self.left_lfos[2].next_value() * self.calc_depth / 2.0).round() as i32;
+        let offset1 = ((self.left_lfos[0].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
+        let offset2 = ((self.left_lfos[1].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
+        let offset3 = ((self.left_lfos[2].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
 
         self.left_lfos[0].update_lfo();
         self.left_lfos[1].update_lfo();
@@ -181,9 +150,9 @@ impl Chorus {
     pub fn process_right(&mut self, x: f32) -> f32 {
         let xx = x + self.wet * self.feedback * self.right_feedback_buffer.get(self.delay_samples).unwrap();
 
-        let offset1 = (self.right_lfos[0].next_value() * self.calc_depth / 2.0).round() as i32;
-        let offset2 = (self.right_lfos[1].next_value() * self.calc_depth / 2.0).round() as i32;
-        let offset3 = (self.right_lfos[2].next_value() * self.calc_depth / 2.0).round() as i32;
+        let offset1 = ((self.right_lfos[0].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
+        let offset2 = ((self.right_lfos[1].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
+        let offset3 = ((self.right_lfos[2].next_value() * self.calc_depth / 2.0).round() as i32).clamp(-(self.delay_samples as i32) + 1 , self.delay_samples as i32 - 1);
 
         self.right_lfos[0].update_lfo();
         self.right_lfos[1].update_lfo();

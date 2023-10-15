@@ -12,21 +12,7 @@ mod chorus;
 
 struct MaerorChorus {
     params: Arc<MaerorChorusParams>,
-    l_delay_line1: delay::Delay,
-    l_delay_line2: delay::Delay,
-    l_delay_line3: delay::Delay,
-    r_delay_line1: delay::Delay,
-    r_delay_line2: delay::Delay,
-    r_delay_line3: delay::Delay,
-    l_lfo1: lfo::LFO,
-    l_lfo2: lfo::LFO,
-    l_lfo3: lfo::LFO,
-    r_lfo1: lfo::LFO,
-    r_lfo2: lfo::LFO,
-    r_lfo3: lfo::LFO,
     sample_rate: f32,
-    l_feedback_buffer: Box<VecDeque<f32>>,
-    r_feedback_buffer: Box<VecDeque<f32>>,
     chorus: chorus::Chorus,
 }
 
@@ -54,21 +40,7 @@ impl Default for MaerorChorus {
     fn default() -> Self {
         Self {
             params: Arc::new(MaerorChorusParams::default()),
-            l_delay_line1: delay::Delay::new(44100, 0, 0.0),
-            l_delay_line2: delay::Delay::new(44100, 0, 0.0),
-            l_delay_line3: delay::Delay::new(44100, 0, 0.0),
-            r_delay_line1: delay::Delay::new(44100, 0, 0.0),
-            r_delay_line2: delay::Delay::new(44100, 0, 0.0),
-            r_delay_line3: delay::Delay::new(44100, 0, 0.0),
-            l_lfo1: lfo::LFO::new(44100.0, 0.25),
-            l_lfo2: lfo::LFO::new(44100.0, 0.25),
-            l_lfo3: lfo::LFO::new(44100.0, 0.25),
-            r_lfo1: lfo::LFO::new(44100.0, 0.25),
-            r_lfo2: lfo::LFO::new(44100.0, 0.25),
-            r_lfo3: lfo::LFO::new(44100.0, 0.25),
             sample_rate: 44100.0,
-            l_feedback_buffer: Box::new(VecDeque::with_capacity(44100)),
-            r_feedback_buffer: Box::new(VecDeque::with_capacity(44100)),
             chorus: Chorus::new(44100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         }
     }
@@ -155,34 +127,9 @@ impl Plugin for MaerorChorus {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        self.l_delay_line1.resize_buffers(_buffer_config.sample_rate as usize);
-        self.l_delay_line2.resize_buffers(_buffer_config.sample_rate as usize);
-        self.l_delay_line3.resize_buffers(_buffer_config.sample_rate as usize);
-        self.r_delay_line1.resize_buffers(_buffer_config.sample_rate as usize);
-        self.r_delay_line2.resize_buffers(_buffer_config.sample_rate as usize);
-        self.r_delay_line3.resize_buffers(_buffer_config.sample_rate as usize);
-
-        self.l_lfo1 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-        self.l_lfo2 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-        self.l_lfo3 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-        self.r_lfo1 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-        self.r_lfo2 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-        self.r_lfo3 = lfo::LFO::new_random_phase(_buffer_config.sample_rate as f32, 0.25);
-
         self.sample_rate = 2.0 * _buffer_config.sample_rate as f32;
 
-        self.l_feedback_buffer = Box::new(VecDeque::with_capacity(_buffer_config.sample_rate as usize));
-        self.l_feedback_buffer.make_contiguous();
-        self.r_feedback_buffer = Box::new(VecDeque::with_capacity(_buffer_config.sample_rate as usize));
-        self.r_feedback_buffer.make_contiguous();
-
         self.chorus.resize_buffers(self.sample_rate);
-        
-        for _ in 0.._buffer_config.sample_rate as usize {
-            self.l_feedback_buffer.push_back(0.0);
-            self.r_feedback_buffer.push_back(0.0);
-        }
-
         // Resize buffers and perform other potentially expensive initialization operations here.
         // The `reset()` function is always called right after this function. You can remove this
         // function if you do not need it.
@@ -200,6 +147,11 @@ impl Plugin for MaerorChorus {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+
+        // In current configuration this function iterates as follows:
+        // 1. outer loop iterates block-size times
+        // 2. inner loop iterates channel-size times. 
+
         for (i, channel_samples) in buffer.iter_samples().enumerate() {
             // Smoothing is optionally built into the parameters themselves
             // let gain = self.params.gain.smoothed.next();
@@ -210,8 +162,6 @@ impl Plugin for MaerorChorus {
             let wet = self.params.wet.smoothed.next();
             let dry = self.params.dry.smoothed.next();
 
-            let delay_samples: usize = ((delay_ms / 1000.0) * self.sample_rate).round() as usize;
-
             self.chorus.set_params(self.sample_rate, delay_ms, feedback, depth, rate, wet, dry);
 
             for (num, sample) in channel_samples.into_iter().enumerate() {
@@ -221,85 +171,6 @@ impl Plugin for MaerorChorus {
                     *sample = self.chorus.process_right(*sample);
                 }
             }
-
-            // for (j, sample) in channel_samples.into_iter().enumerate() {
-            //     if j == 0 {
-            //         self.l_lfo1.rate = rate;
-            //         self.l_lfo2.rate = rate;
-            //         self.l_lfo3.rate = rate;
-
-            //         self.l_delay_line1.delay = delay_samples;
-            //         self.l_delay_line2.delay = delay_samples;
-            //         self.l_delay_line3.delay = delay_samples;
-
-            //         let mut calculated_depth = (depth / 1000.0) * self.sample_rate;
-            //         if calculated_depth > delay_samples as f32 / 2.0 {
-            //             calculated_depth = delay_samples as f32 / 2.0;
-            //         }
-            //         let offset1 = (self.l_lfo1.next_value() * calculated_depth / 2.0).round() as i32;
-            //         let offset2 = (self.l_lfo2.next_value() * calculated_depth / 2.0).round() as i32;
-            //         let offset3 = (self.l_lfo3.next_value() * calculated_depth / 2.0).round() as i32;
-                    
-            //         let x = *sample as f32 + wet * feedback * self.l_feedback_buffer.get(delay_samples).unwrap();
-            //         //nih_log!("{}", (delay_samples as i32 + offset1) as usize);
-            //         let mut y = wet * 1.0/3.0 * (
-            //             self.l_delay_line1.process_sample(x, (delay_samples as i32 + offset1) as usize) 
-            //             + self.l_delay_line2.process_sample(x, (delay_samples as i32 + offset2) as usize) 
-            //             + self.l_delay_line3.process_sample(x, (delay_samples as i32 + offset3) as usize)
-            //         ) + x * dry;
-                    
-
-            //         if wet + dry > 1.0 {
-            //             y = y / (wet + dry);
-            //         }
-
-            //         *sample = y;
-                    
-            //         self.l_lfo1.update_lfo();
-            //         self.l_lfo2.update_lfo();
-            //         self.l_lfo3.update_lfo();
-    
-            //         self.l_feedback_buffer.rotate_right(1);
-            //         self.l_feedback_buffer[0] = *sample;
-            //     } else {
-            //         self.r_lfo1.rate = rate;
-            //         self.r_lfo2.rate = rate;
-            //         self.r_lfo3.rate = rate;
-
-            //         self.r_delay_line1.delay = delay_samples;
-            //         self.r_delay_line2.delay = delay_samples;
-            //         self.r_delay_line3.delay = delay_samples;
-
-            //         let mut calculated_depth = (depth / 1000.0) * self.sample_rate;
-            //         if calculated_depth > delay_samples as f32 / 2.0 {
-            //             calculated_depth = delay_samples as f32 / 2.0;
-            //         }
-
-            //         let offset1 = (self.r_lfo1.next_value() * calculated_depth / 2.0).round() as i32;
-            //         let offset2 = (self.r_lfo2.next_value() * calculated_depth / 2.0).round() as i32;
-            //         let offset3 = (self.r_lfo3.next_value() * calculated_depth / 2.0).round() as i32;
-                    
-            //         let x = *sample as f32 + wet * feedback * self.r_feedback_buffer.get(delay_samples).unwrap();
-            //         let mut y = wet * 1.0/3.0 * (
-            //             self.r_delay_line1.process_sample(x, (delay_samples as i32 + offset1) as usize) 
-            //             + self.r_delay_line2.process_sample(x, (delay_samples as i32 + offset2) as usize) 
-            //             + self.r_delay_line3.process_sample(x, (delay_samples as i32 + offset3) as usize)
-            //         ) + x * dry;
-                    
-            //         if wet + dry > 1.0 {
-            //             y = y / (wet + dry);
-            //         }
-
-            //         *sample = y;
-                    
-            //         self.r_lfo1.update_lfo();
-            //         self.r_lfo2.update_lfo();
-            //         self.r_lfo3.update_lfo();
-    
-            //         self.r_feedback_buffer.rotate_right(1);
-            //         self.r_feedback_buffer[0] = *sample;
-            //     }
-            // }
         }
 
         ProcessStatus::Normal

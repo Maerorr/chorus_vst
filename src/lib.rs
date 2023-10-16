@@ -9,15 +9,17 @@ mod delay;
 mod lfo;
 mod editor;
 mod chorus;
+mod filter;
 
-struct MaerorChorus {
-    params: Arc<MaerorChorusParams>,
+struct ChorusPlugin {
+    params: Arc<ChorusParams>,
     sample_rate: f32,
     chorus: chorus::Chorus,
+    output_hpf: filter::BiquadFilter,
 }
 
 #[derive(Params)]
-struct MaerorChorusParams {
+struct ChorusParams {
     #[persist = "editor-state"]
     editor_state: Arc<ViziaState>,
 
@@ -36,17 +38,18 @@ struct MaerorChorusParams {
     pub dry: FloatParam,
 }
 
-impl Default for MaerorChorus {
+impl Default for ChorusPlugin {
     fn default() -> Self {
         Self {
-            params: Arc::new(MaerorChorusParams::default()),
+            params: Arc::new(ChorusParams::default()),
             sample_rate: 44100.0,
             chorus: Chorus::new(44100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            output_hpf: filter::BiquadFilter::new(),
         }
     }
 }
 
-impl Default for MaerorChorusParams {
+impl Default for ChorusParams {
     fn default() -> Self {
         Self {
             editor_state: editor::default_state(),
@@ -86,9 +89,9 @@ impl Default for MaerorChorusParams {
     }
 }
 
-impl Plugin for MaerorChorus {
-    const NAME: &'static str = "maeror_chorus";
-    const VENDOR: &'static str = "maeror";
+impl Plugin for ChorusPlugin {
+    const NAME: &'static str = "tsk_chorus";
+    const VENDOR: &'static str = "236587 & 236598";
     const URL: &'static str = "none";
     const EMAIL: &'static str = "none";
     const VERSION: &'static str = "test";
@@ -130,6 +133,8 @@ impl Plugin for MaerorChorus {
         self.sample_rate = 2.0 * _buffer_config.sample_rate as f32;
 
         self.chorus.resize_buffers(self.sample_rate);
+        self.output_hpf.set_sample_rate(_buffer_config.sample_rate as f32);
+        self.output_hpf.coefficients(filter::FilterType::HighPass2, 25.0, 0.707, 1.0);
         // Resize buffers and perform other potentially expensive initialization operations here.
         // The `reset()` function is always called right after this function. You can remove this
         // function if you do not need it.
@@ -167,8 +172,10 @@ impl Plugin for MaerorChorus {
             for (num, sample) in channel_samples.into_iter().enumerate() {
                 if num == 0 {
                     *sample = self.chorus.process_left(*sample);
+                    *sample = self.output_hpf.process_left(*sample);
                 } else {
                     *sample = self.chorus.process_right(*sample);
+                    *sample = self.output_hpf.process_right(*sample);
                 }
             }
         }
@@ -184,7 +191,7 @@ impl Plugin for MaerorChorus {
     }
 }
 
-impl ClapPlugin for MaerorChorus {
+impl ClapPlugin for ChorusPlugin {
     const CLAP_ID: &'static str = "{{ cookiecutter.clap_id }}";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("{{ cookiecutter.description }}");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
@@ -194,13 +201,13 @@ impl ClapPlugin for MaerorChorus {
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo];
 }
 
-impl Vst3Plugin for MaerorChorus {
-    const VST3_CLASS_ID: [u8; 16] = *b"MaerorChorsRvdH.";
+impl Vst3Plugin for ChorusPlugin {
+    const VST3_CLASS_ID: [u8; 16] = *b"tsk__ChorusRvdH.";
 
     // And also don't forget to change these categories
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Delay, Vst3SubCategory::Modulation, Vst3SubCategory::Fx];
 }
 
-//nih_export_clap!(MaerorChorus);
-nih_export_vst3!(MaerorChorus);
+//nih_export_clap!(Chorus);
+nih_export_vst3!(ChorusPlugin);

@@ -1,8 +1,8 @@
 [package]
-name = "maeror_chorus"
+name = "chorus"
 version = "0.1.0"
 edition = "2021"
-authors = ["maeror <none, this is a test}>"]
+authors = ["236587&236598"]
 license = " "
 homepage = " "
 description = "a simple chorus"

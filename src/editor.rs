@@ -7,12 +7,12 @@ use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 
 
-use crate::MaerorChorusParams;
+use crate::ChorusParams;
 
 
 #[derive(Lens)]
 struct Data {
-    chorus_data: Arc<MaerorChorusParams>
+    chorus_data: Arc<ChorusParams>
 }
 
 impl Model for Data {}
@@ -22,7 +22,7 @@ pub(crate) fn default_state() -> Arc<ViziaState> {
 }
 
 pub(crate) fn create(
-    chorus_data: Arc<MaerorChorusParams>,
+    chorus_data: Arc<ChorusParams>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, 

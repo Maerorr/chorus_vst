@@ -158,8 +158,7 @@ impl Plugin for ChorusPlugin {
         // 2. inner loop iterates channel-size times. 
 
         for (i, channel_samples) in buffer.iter_samples().enumerate() {
-            // Smoothing is optionally built into the parameters themselves
-            // let gain = self.params.gain.smoothed.next();
+
             let depth = self.params.depth.smoothed.next();
             let rate = self.params.rate.smoothed.next();
             let delay_ms = self.params.delay_ms.smoothed.next();

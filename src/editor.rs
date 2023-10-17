@@ -65,7 +65,7 @@ pub(crate) fn create(
     
                         Label::new(cx, "Dry").font_size(15.0)
                         .height(Pixels(30.0));
-                    }).child_top(Pixels(6.0));
+                    }).child_top(Pixels(6.0)).row_between(Pixels(3.0));
     
                     VStack::new(cx, |cx| {
                         ParamSlider::new(cx, Data::chorus_data, |params| &params.depth)
@@ -85,7 +85,7 @@ pub(crate) fn create(
 
                         ParamSlider::new(cx, Data::chorus_data, |params| &params.dry)
                         .height(Pixels(30.0));
-                    });
+                    }).row_between(Pixels(3.0));
                 }).col_between(Pixels(30.0));
                 
             }).row_between(Pixels(0.0))

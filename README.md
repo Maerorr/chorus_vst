@@ -7,5 +7,5 @@ One of multiple VST plugins written for Simulation Technology classes
 After installing [Rust](https://rustup.rs/), you can compile Chorus as follows:
 
 ```shell
-cargo xtask bundle maeror_chorus --release
+cargo xtask bundle chorus --release
 ```
